@@ -106,14 +106,10 @@ class UserController extends Controller
 
         $user->update(['is_blocked' => !$current_block_status]);
 
-        // Eager load relationships if your UserResource expects them
-        $user->load('roles.permissions');   
-        
         $message = $current_block_status ? 'User unblocked successfully!' : 'User blocked successfully!';
 
         return response()->json([
-            'message' => $message,
-            'user' => new UserResource($user) // Return the updated user data
+            'message' => $message
         ], 200); // 200 OK
     }
 
@@ -130,18 +126,18 @@ class UserController extends Controller
         $message = "";
 
         // Add the 'web' guard here for both methods
-        if ($user->hasRole($request->role, 'web')) {
+        if ($user->hasRole($request->role)) {
             if ($role->name === 'admin' && $user->id === Auth::id()) {
                 return response()->json([
                     'message' => 'You cannot remove your own admin role.'
                 ], 403);
             }
             
-            $user->removeRole($request->role, 'web'); // <-- Add 'web' guard here
+            $user->removeRole($request->role); // <-- Add 'web' guard here
             $message = ucfirst($request->role) . ' role removed successfully!';
         } else {
 
-            $user->assignRole($request->role, 'web'); // <-- Add 'web' guard here
+            $user->assignRole($request->role); // <-- Add 'web' guard here
             $message = ucfirst($request->role) . ' role assigned successfully!';
         }
 

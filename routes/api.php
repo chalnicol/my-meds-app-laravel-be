@@ -7,6 +7,8 @@ use App\Http\Controllers\Auth\AuthController;
 
 use App\Http\Controllers\MedicationController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\RoleController;
 
 use App\Http\Controllers\Auth\SocialLoginController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
@@ -75,7 +77,15 @@ Route::middleware(['auth:sanctum', 'user.blocked', 'verified'])->group(function 
     
     Route::group(['middleware' => ['role:admin']], function () {
         //..
+        Route::get('/admin', [AdminController::class, 'getCounts']);
+        
         Route::get('/admin/users', [UserController::class, 'index']);
         Route::get('/admin/users/{user}', [UserController::class, 'show']);
+        Route::patch('/admin/users/{user}/toggleBlock', [UserController::class, 'toggleBlockUser']);
+        Route::patch('/admin/users/{user}/updateRoles', [UserController::class, 'updateUserRoles']);
+        
+        Route::get('/admin/roles', [RoleController::class, 'index']);
+
+        
     });
 });
