@@ -249,6 +249,19 @@ class AuthController extends Controller
         return new UserResource($user);
     }
 
+    public function update_settings (Request $request)
+    {
+        $request->validate([
+            'timezone' => 'required|string|timezone:all'
+        ]);
+
+        $user = $request->user(); 
+        $user->timezone = $request->timezone;
+        $user->save();
+
+        return response()->json(['message' => 'Settings updated successfully!']);
+    }
+
     public function update_profile(Request $request)
     {
         $user = $request->user(); // Get the authenticated user
@@ -256,7 +269,6 @@ class AuthController extends Controller
         $request->validate([
             'fullname' => 'required|string|min:5|max:255|regex:/^[a-zA-Z ]+$/',
             'email' => 'required|string|email|max:255|unique:users,email,'. $user->id,
-            'timezone' => 'required|string|timezone:all'
         ], [
             'fullname.regex' => 'Invalid Full Name format. Please check rules and try again.'
         ]);
@@ -265,7 +277,6 @@ class AuthController extends Controller
         $isEmailNew = $user->email !== $request->email;
 
         $user->fullname = $request->fullname;
-        $user->timezone = $request->timezone;
 
         if ( $isEmailNew  ) {
 

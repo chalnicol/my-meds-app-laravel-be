@@ -10,19 +10,18 @@ class Medication extends Model
     //
     protected $fillable = [
         'user_id', // Assuming each medication is associated with a user
-        'brandName',
-        'genericName',
+        'brand_name',
+        'generic_name',
         'dosage',
+        'drug_form',
         'status',
-        'frequencyType',
+        'frequency_type',
         'frequency',
-        'dailySchedule',
-        'remainingStock',
+        'remaining_stock',
     ];
 
     protected $casts = [
         'frequency' => 'array',
-        'dailySchedule' => 'array',
     ];
 
     protected $appends = [
@@ -38,6 +37,12 @@ class Medication extends Model
 
     public function stocks() {
         return $this->hasMany(Stock::class);
+    }
+
+    public function timeSchedules()
+    {
+        // A Medication has many TimeSchedule records
+        return $this->hasMany(TimeSchedule::class);
     }
 
     public function getTotalQuantityAttribute()

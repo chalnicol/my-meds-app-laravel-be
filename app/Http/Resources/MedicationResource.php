@@ -17,20 +17,27 @@ class MedicationResource extends JsonResource
         
         return [
             'id' => $this->id,
-            'brandName' => $this->brandName,
-            'genericName' => $this->genericName,
+            'brand_name' => $this->brand_name,
+            'generic_name' => $this->generic_name,
             'dosage' => $this->dosage,
+            'drug_form' => $this->drug_form,
             'status' => $this->status,
-            'frequencyType' => $this->frequencyType,
+            'frequency_type' => $this->frequency_type,
             'frequency' => $this->frequency,
-            'dailySchedule' => $this->dailySchedule,
-            'createdAt' => $this->created_at,
-            'updatedAt' => $this->updated_at,
-            'remainingStock' => $this->remainingStock,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
+            'remaining_stock' => $this->remaining_stock,
+            'total_quantity' => $this->total_quantity ?? 0,
+            'total_value' => $this->total_value ?? 0,
             'user_id' => $this->user_id,
-            'totalQuantity' => $this->total_quantity ?? 0,
-            'totalValue' => $this->total_value ?? 0,
             'user' => new UserResource($this->whenLoaded('user')),
+            // 'time_schedules' => $this->whenLoaded('timeSchedules', function () {
+            //     // Return the collection of schedules, sorted by time
+            //     return $this->timeSchedules->sortBy('schedule_time')->values()->toArray();  
+            // }),
+            'time_schedules' => $this->whenLoaded('timeSchedules', function () {
+                return TimeScheduleResource::collection($this->timeSchedules);
+            })
         ];
     }
 }

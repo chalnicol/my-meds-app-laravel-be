@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Medication;
 use App\Models\Stock;
 use App\Models\MedicationIntake;
-
+use App\Models\TimeSchedule; // NEW
 
 use Carbon\Carbon;
 
@@ -25,12 +25,17 @@ class MedicationController extends Controller
         //
         $searchTerm = $request->query('search');
 
-        $medications = Medication::where('user_id', $request->user()->id)
+        $medications = Medication::with('timeSchedules')
+            ->where('user_id', $request->user()->id)
             ->when($searchTerm, function ($query, $searchTerm) {
                 $query->where(function ($q) use ($searchTerm) {
-                    $q->where('brandName', 'LIKE', '%' . $searchTerm . '%')
-                      ->orWhere('genericName', 'LIKE', '%' . $searchTerm . '%')
-                      ->orWhere('dosage', 'LIKE', '%' . $searchTerm . '%');
+                    $q->where('brand_name', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhere('generic_name', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhere('dosage', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhere('status', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhere('frequency_type', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhere('drug_form', 'LIKE', '%' . $searchTerm . '%');
+                    
                 });
             })
              ->orderBy('created_at', 'desc')
@@ -54,29 +59,48 @@ class MedicationController extends Controller
     {
         //
          $request->validate([
-            'brandName' => 'required|string|max:255',
+            'brandName' => 'required|string|max:255|unique:medications,brand_name',
             'genericName' => 'required|string|max:255',
             'dosage' => 'required|string|max:255',
+            'drugForm' => 'required|string|in:Tablet,Capsule,Liquid,Drops,Injection,Cream,Syrup,Ointment,Suppository,Other',
             'status' => 'required|string|in:Active,Inactive',
             'frequencyType' => 'required|string|in:Everyday,SpecificDays',
             'frequency' => 'required_if:frequencyType,SpecificDays|nullable|array',
-            'dailySchedule' => 'required|array',
+            'timeSchedules' => 'required|array',
             'remainingStock' => 'required|integer|min:0'
         ]);
 
+        // dd ($request);
         // $user = $request->user();
 
         $medication = Medication::create([
             'user_id' => $request->user()->id,
-            'brandName' => ucwords($request->brandName),
-            'genericName' => ucwords($request->genericName),
+            'brand_name' => ucwords($request->brandName),
+            'generic_name' => ucwords($request->genericName),
             'dosage' => $request->dosage,
+            'drug_form' => $request->drugForm,
             'status' => $request->status,
-            'frequencyType' => $request->frequencyType,
+            'frequency_type' => $request->frequencyType,
             'frequency' => $request->frequencyType === 'SpecificDays' ? $request->frequency : null,
-            'dailySchedule' => $request->dailySchedule,
-            'remainingStock' => $request->remainingStock
+            'remaining_stock' => $request->remainingStock
         ]);
+
+        if ($medication) {
+
+            $is_countable = $medication->drug_form == 'Tablet' ||  $medication->drug_form == 'Capsule';
+
+            foreach ($request->timeSchedules as $schedule) {
+
+                $newQuantity = $is_countable ? $schedule['quantity'] : null;
+
+                $newTimeSchedule = Carbon::parse($schedule['schedule_time'])->format('H:i');
+
+                $medication->timeSchedules()->create([
+                    'schedule_time' => $newTimeSchedule,
+                    'quantity' => $newQuantity,
+                ]);
+            }
+        }
 
         return response()->json([
             'message' => 'Medication added successfully.',
@@ -98,6 +122,8 @@ class MedicationController extends Controller
         // For the total value, use DB::raw to perform the multiplication in the query
         $medication->loadAggregate('stocks', DB::raw('price * quantity'), 'sum');
         
+        $medication->load('timeSchedules');
+
         //
         return response()->json([
             'message' => 'Medication fetched successfully.',
@@ -117,27 +143,55 @@ class MedicationController extends Controller
     {
         //
          $request->validate([
-            'brandName' => 'required|string|max:255',
+            'brandName' => 'required|string|max:255|unique:medications,brand_name,'.$medication->id, 
             'genericName' => 'required|string|max:255',
             'dosage' => 'required|string|max:255',
+            'drugForm' => 'required|string|in:Tablet,Capsule,Liquid,Drops,Injection,Cream,Syrup,Ointment,Suppository,Other',
             'status' => 'required|string|in:Active,Inactive',
             'frequencyType' => 'required|string|in:Everyday,SpecificDays',
             'frequency' => 'required_if:frequencyType,SpecificDays|nullable|array',
-            'dailySchedule' => 'required|array',
+            'timeSchedules' => 'required|array',
         ]);
 
         // $user = $request->user();
 
         $medication->update([
-            'brandName' => ucwords($request->brandName),
-            'genericName' => ucwords($request->genericName),
+            'brand_name' => ucwords($request->brandName),
+            'generic_name' => ucwords($request->genericName),
             'dosage' => $request->dosage,
+            'drug_form' => $request->drugForm,
             'status' => $request->status,
-            'frequencyType' => $request->frequencyType,
+            'frequency_type' => $request->frequencyType,
             'frequency' => $request->frequencyType === 'SpecificDays' ? $request->frequency : null,
-            'dailySchedule' => $request->dailySchedule,
         ]);
 
+        $is_countable = $medication->drug_form == 'Tablet' ||  $medication->drug_form == 'Capsule';
+
+        $submitted_schedule_ids = [];
+
+        foreach ($request->timeSchedules as $schedule) {
+
+            $newQuantity = $is_countable ? $schedule['quantity'] : null;
+
+            $newTimeSchedule = Carbon::parse($schedule['schedule_time'])->format('H:i');
+
+            $timeSchedule = $medication->timeSchedules()->updateOrCreate(
+                [
+                    'id' => $schedule['id']
+                ],
+                [
+                    'schedule_time' => $newTimeSchedule,
+                    'quantity' => $newQuantity,
+                ]
+            );
+
+            $submitted_schedule_ids[] = $timeSchedule->id;
+        }
+
+        $medication->timeSchedules()
+            ->whereNotIn('id', $submitted_schedule_ids)
+            ->delete();
+        
         return response()->json([
             'message' => 'Medication updated successfully.',
             'medication' => $medication
@@ -203,7 +257,7 @@ class MedicationController extends Controller
         ]);
 
         $medication->update([
-            'remainingStock' => $medication->remainingStock + $request->quantity
+            'remaining_stock' => $medication->remaining_stock + $request->quantity
         ]);
 
         $stock = $medication->stocks()->create([
@@ -236,7 +290,7 @@ class MedicationController extends Controller
         ]);
 
         $medication->update([
-            'remainingStock' => $medication->remainingStock + $request->quantity - $oldRemainingStock
+            'remaining_stock' => $medication->remaining_stock + $request->quantity - $oldRemainingStock
         ]);
 
         return response()->json([
@@ -246,44 +300,6 @@ class MedicationController extends Controller
 
 
     }
-
-    // public function getTodaysMeds () 
-    // {
-
-    //     $dayOfWeek = Carbon::now()->dayOfWeek;
-    //     // $dayOfWeek = Carbon::create(2025, 9, 28, 0, 0, 0)->dayOfWeek;
-
-    //     $user = Auth::user();
-
-    //     if (!$user) {
-    //         return response()->json([
-    //             'message' => 'No authenticated user',
-    //         ]);
-    //     }
-
-    //     $medications = $user->medications()
-    //         ->where('frequencyType', 'Everyday')
-    //         ->orWhere('frequency', 'like', "%{$dayOfWeek}%")
-    //         ->get();
-
-    //     // Add the 'is_taken' flag to each medication
-    //     $medsWithStatus = $medications->map(function ($medication) use ($user, $dayOfWeek) {
-    //         $isTaken = MedicationIntake::where('user_id', $user->id)
-    //             ->where('medication_id', $medication->id)
-    //             ->whereDate('taken_at', Carbon::today())
-    //             ->exists();
-
-    //         $medication->is_taken = $isTaken;
-
-    //         return $medication;
-    //     });
-
-    //     return response()->json([
-    //         'message' => 'Medications fetched successfully.',
-    //         'medications' => MedicationResource::collection($medications)
-    //     ]);
-        
-    // }
 
     public function getTodaysMeds()
     {
@@ -295,20 +311,23 @@ class MedicationController extends Controller
         }
 
         $now = Carbon::now($user->timezone);
-        $dayOfWeek = $now->dayOfWeek;
+        // $dayOfWeek = $now->dayOfWeek;
+        $dayOfWeekIndex = (string) $now->dayOfWeek; 
+        $todayDate = $now->toDateString();
 
         // Fetch all medications for the user.
-       $medications = Medication::where('user_id', $user->id)
+       $medications = Medication::with('timeSchedules')
+        ->where('user_id', $user->id)
         ->where('status', 'Active')
-        ->where(function ($query) use ($dayOfWeek) {
-            $query->where('frequencyType', 'Everyday')
-                  ->orWhere('dailySchedule', 'like', "%{$dayOfWeek}%");
+        ->where(function ($query) use ($dayOfWeekIndex) {
+            $query->where('frequency_type', 'Everyday')
+                ->orWhereJsonContains('frequency', $dayOfWeekIndex); 
         })
         ->get();
     
         // Fetch all of today's intake records for the user.
         $intakeRecords = MedicationIntake::where('user_id', $user->id)
-            ->whereDate('taken_at', $now->toDateString())
+            ->whereDate('taken_at', $todayDate)
             ->get();
     
         return response()->json([
@@ -326,51 +345,192 @@ class MedicationController extends Controller
         }
 
         $request->validate([
-            'medicationId' => 'required|exists:medications,id',
-            'scheduledTime' => 'required|string', // The new required field
+            'timeScheduleId' => 'required|integer|exists:time_schedules,id', // The new required field
         ]);
 
-
-        $medication = Medication::find($request->medicationId);
+        $schedule = TimeSchedule::with('medication')
+            ->where('id', $request->timeScheduleId)
+            ->first();
         
+        if (!$schedule || $schedule->medication->user_id !== $user->id) {
+            return response()->json(['message' => 'Schedule not found or unauthorized.'], 403);
+        }
+
+        $medication = $schedule->medication;
+        $dosage = $schedule->quantity; // The amount to add/subtract
+        $todayDate = Carbon::today()->toDateString();
+
         $existingIntake = MedicationIntake::where('user_id', $user->id)
-            ->where('medication_id', $request->medicationId)
-            ->where('scheduled_time', $request->scheduledTime) // Check for the specific time
-            ->whereDate('taken_at', Carbon::today())
+            ->where('time_schedule_id', $request->timeScheduleId) // Check for the specific time
+            ->whereDate('taken_at', $todayDate)
             ->first();
 
         if ($existingIntake) {
 
-            $medication->update([
-                'remainingStock' => $medication->remainingStock + 1
-            ]);
+            $medication->increment('remaining_stock', $dosage); 
 
             $existingIntake->delete();
             return response()->json(['message' => 'Medication intake removed successfully.']);
 
-
         } else {
 
-            if ($medication->remainingStock <= 0) {
+            if ($medication->remaining_stock <= 0) {
                 return response()->json(['message' => 'Medication is out of stock.'], 400);
             }
 
-            $medication->update([
-                'remainingStock' => $medication->remainingStock - 1
-            ]);
+            $medication->decrement('remaining_stock', $dosage); 
             
             MedicationIntake::create([
                 'user_id' => $user->id,
-                'medication_id' => $request->medicationId,
-                'scheduled_time' => $request->scheduledTime, // Save the specific time
+                'time_schedule_id' => $schedule->id,
                 'taken_at' => Carbon::now(),
             ]);
+
             return response()->json(['message' => 'Medication intake saved successfully.']);
         }
     }
 
-    
+    // public function getTodaysMeds()
+    // {
+    //     $user = Auth::user();
 
-  
+    //     if (!$user) {
+    //         return response()->json(['message' => 'No authenticated user'], 401);
+    //     }
+
+    //     // 1. Determine today's date, time, and day of the week based on user's timezone.
+    //     $now = Carbon::now($user->timezone ?? config('app.timezone')); // Use user's timezone or default
+    //     // $dayOfWeek = $now->dayOfWeek; // 0 (Sunday) to 6 (Saturday)
+    //     $todayDate = $now->toDateString();
+    //     $dayOfWeekIndex = (string) $now->dayOfWeek; 
+
+    //     // 2. Fetch all TODAY'S ACTIVE medications with their schedules
+    //     $medications = Medication::with('timeSchedules') // Eager load the new schedule table
+    //         ->where('user_id', $user->id)
+    //         ->where('status', 'Active')
+    //         ->where(function ($query) use ($dayOfWeekIndex) {
+    //             $query->where('frequency_type', 'Everyday')
+    //                 // Check if the current day's index exists in the JSON 'frequency' array
+    //                 ->orWhereJsonContains('frequency', $dayOfWeekIndex); 
+    //         })
+    //         ->get();
+        
+
+    //     // 3. Fetch all of today's intake records for the user.
+    //     $intakeRecords = MedicationIntake::where('user_id', $user->id)
+    //         ->whereDate('taken_at', $todayDate)
+    //         ->get()
+    //         ->keyBy('time_schedule_id'); // Key the collection by schedule ID for easy lookup
+        
+    //     $todaysSchedule = collect();
+
+    //     foreach ($medications as $medication) {
+    //         foreach ($medication->timeSchedules as $schedule) {
+                
+    //             // Check if an intake record exists for this specific schedule ID today
+    //             $intake = $intakeRecords->get($schedule->id);
+
+    //             $todaysSchedule->push([
+    //                 // Schedule Details (The dose information)
+    //                 'schedule_id' => $schedule->id,
+    //                 'schedule_time' => $schedule->schedule_time,
+    //                 'dosage_quantity' => $schedule->quantity,
+                    
+    //                 // Medication Details
+    //                 'medication_id' => $medication->id,
+    //                 'brand_name' => $medication->brand_name,
+    //                 'generic_name' => $medication->generic_name,
+    //                 'remaining_stock' => $medication->remaining_stock,
+
+    //                 // Intake Status
+    //                 'is_taken' => (bool) $intake,
+    //                 'taken_at' => $intake ? $intake->taken_at : null,
+    //             ]);
+    //         }
+    //     }
+
+    //     // Sort the final list by scheduled time
+    //     $todaysSchedule = $todaysSchedule->sortBy('schedule_time')->values();
+
+    //     return response()->json([
+    //         'message' => 'Today\'s medication schedule fetched successfully.',
+    //         'schedules' => $todaysSchedule,
+    //     ]);
+    // }
+
+    // public function takeMedication(Request $request)
+    // {
+    //     $user = Auth::user();
+    //     if (!$user) {
+    //         return response()->json(['message' => 'No authenticated user'], 401);
+    //     }
+
+    //     $request->validate([
+    //         // We now require the ID of the time_schedule entry
+    //         'time_schedule_id' => 'required|exists:time_schedules,id',
+    //     ]);
+
+    //     // 1. Get the schedule and related medication in one query
+    //     $schedule = TimeSchedule::with('medication')
+    //         ->where('id', $request->time_schedule_id)
+    //         ->first();
+
+    //     if (!$schedule || $schedule->medication->user_id !== $user->id) {
+    //         return response()->json(['message' => 'Schedule not found or unauthorized.'], 403);
+    //     }
+
+    //     $medication = $schedule->medication;
+    //     $dosage = $schedule->quantity; // The amount to add/subtract
+    //     $todayDate = Carbon::today()->toDateString();
+
+    //     // 2. Check if the dose has already been taken today for this specific schedule.
+    //     $existingIntake = MedicationIntake::where('user_id', $user->id)
+    //         ->where('time_schedule_id', $schedule->id)
+    //         ->whereDate('taken_at', $todayDate)
+    //         ->first();
+
+    //     // Use a database transaction to ensure stock and intake are updated together
+    //     // DB::beginTransaction();
+    //     // try {
+    //         if ($existingIntake) {
+    //             // ACTION: UNTAKE (Remove the intake record and restore stock)
+                
+    //             // Increment remaining stock by the dose amount
+    //             $medication->increment('remaining_stock', $dosage); 
+                
+    //             $existingIntake->delete();
+    //             $message = 'Medication intake removed successfully. Stock restored.';
+    //         } else {
+    //             // ACTION: TAKE (Create the intake record and subtract stock)
+
+    //             if ($medication->remaining_stock < $dosage) {
+    //                 return response()->json([
+    //                     'message' => 'Medication is out of stock.',
+    //                     'required' => $dosage,
+    //                     'available' => $medication->remaining_stock
+    //                 ], 400);
+    //             }
+
+    //             // Decrement remaining stock by the dose amount
+    //             $medication->decrement('remaining_stock', $dosage);
+
+    //             // Create the intake record linked to the schedule ID
+    //             MedicationIntake::create([
+    //                 'user_id' => $user->id,
+    //                 'time_schedule_id' => $schedule->id,
+    //                 'taken_at' => Carbon::now(),
+    //             ]);
+    //             $message = 'Medication intake saved successfully. Stock updated.';
+    //         }
+
+    //         // DB::commit();
+    //         return response()->json(['message' => $message]);
+
+    //     // } catch (\Exception $e) {
+    //     //     DB::rollBack();
+    //     //     // Log the error $e->getMessage() for debugging
+    //     //     return response()->json(['message' => 'An error occurred during transaction.'], 500);
+    //     // }
+    // }
 
 }

@@ -13,8 +13,7 @@ class MedicationIntake extends Model
 
     protected $fillable = [
         'user_id',
-        'medication_id',
-        'scheduled_time', 
+        'time_schedule_id',
         'taken_at',
     ];
 

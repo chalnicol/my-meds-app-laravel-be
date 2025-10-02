@@ -12,10 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('medication_intakes', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('medication_id')->constrained()->onDelete('cascade');
+            
+             $table->id();
+            // $table->foreignId('medication_id')->constrained()->onDelete('cascade');
+            $table->foreignId('time_schedule_id')->constrained('time_schedules')->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('scheduled_time');
+            $table->integer('quantity')->nullable(); // NEW
             $table->timestamp('taken_at')->useCurrent();
             $table->timestamps();
         });

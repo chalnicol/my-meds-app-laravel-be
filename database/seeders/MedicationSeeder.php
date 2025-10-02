@@ -4,8 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use App\Models\User; // Import your User model
-use Illuminate\Support\Facades\Hash; // For hashing the password
+use App\Models\Medication; // Import your User model
 
 
 class MedicationSeeder extends Seeder
@@ -16,52 +15,161 @@ class MedicationSeeder extends Seeder
     public function run(): void
     {
         //
-        $users = [
+        $medications = [
            
             [
                 "brandName" => "Biogesic",
                 "genericName" => "Paracetamol",
                 "dosage" => "500mg",
-                "dosageUnit" => "mg",
                 "status" => "Active",
+                "drugForm" => "Tablet",
                 "frequencyType" => "Everyday",
-                "frequency" => json_encode([]),
-                "dailySchedule" => json_encode(["08:00AM", "12:00PM", "08:00PM"]),
+                "frequency" => null,
+                "time_schedules" => [
+                    [
+                        "schedule_time" => "08:00:00",
+                        "quantity" => 1
+                    ],
+                    [
+                        "schedule_time" => "12:00:00",
+                        "quantity" => 1,
+                    ]
+                ],
+                "initial_stock" => [
+                    'quantity' => 10,
+                    'price' => 30.25,
+                    'source' => 'Mercury Drug - Lagro'
+                ]
             ],
             [
-                "brandName" => "Amoxicillin",
-                "genericName" => "Amoxicillin",
-                "dosage" => "500mg",
-                "dosageUnit" => "mg",
-                "status" => "Active",
-                "frequencyType" => "SpecificDays",
-                "frequency" => json_encode(["Monday", "Wednesday", "Friday"]),
-                "dailySchedule" => json_encode(["02:00PM", "06:00PM", "10:00PM"]),
-            ],
-            [
-                "brandName" => "Ibuprofen",
+                "brandName" => "Advil",
                 "genericName" => "Ibuprofen",
                 "dosage" => "200mg",
-                "dosageUnit" => "mg",
                 "status" => "Active",
+                "drugForm" => "Tablet",
                 "frequencyType" => "SpecificDays",
-                "frequency" => json_encode(["Tuesday", "Thursday", "Saturday"]),
-                "dailySchedule" => json_encode(["02:00PM", "06:00PM", "10:00PM"]),
+                "frequency" => [1, 3, 5],
+                "time_schedules" => [
+                    [
+                        "schedule_time" => "08:00:00",
+                        "quantity" => 2
+                    ],
+                    [
+                        "schedule_time" => "12:00:00",
+                        "quantity" => 2,
+                    ]
+                ],
+                "initial_stock" => [
+                    'quantity' => 10,
+                    'price' => 30.25,
+                    'source' => 'Watsons - SM Fairview'
+                ]
+
+                    
+            ],
+            [
+                "brandName" => "Neozep",
+                "genericName" => "Phenylephrine HCl + Chlorphenamine Maleate + Paracetamol",
+                "dosage" => "10mg/2mg/500mg",
+                "status" => "Active",
+                "drugForm" => "Tablet",
+                "frequencyType" => "Everyday",
+                "frequency" => null,
+                "time_schedules" => [
+                    [
+                        "schedule_time" => "08:00:00",
+                        "quantity" => 1
+                    ],
+                    [
+                        "schedule_time" => "12:00:00",
+                        "quantity" => 1,
+                    ],
+                    [
+                        "schedule_time" => "16:00:00",
+                        "quantity" => 1,
+                    ],
+                    [
+                        "schedule_time" => "20:00:00",
+                        "quantity" => 1,
+                    ]
+                ],
+                "initial_stock" => [
+                    'quantity' => 10,
+                    'price' => 30.25,
+                    'source' => 'Mercury Drug - Lagro'
+                ]
+            ],
+            [
+                "brandName" => "Trimox",
+                "genericName" => "Amoxicillin",
+                "dosage" => "100mg",
+                "status" => "Active",
+                "drugForm" => "Capsule",
+                "frequencyType" => "Everyday",
+                "frequency" => null,
+                "time_schedules" => [
+                    [
+                        "schedule_time" => "08:00:00",
+                        "quantity" => 1
+                    ],
+                    [
+                        "schedule_time" => "12:00:00",
+                        "quantity" => 1,
+                    ],
+                    [
+                        "schedule_time" => "16:00:00",
+                        "quantity" => 1,
+                    ],
+                    [
+                        "schedule_time" => "20:00:00",
+                        "quantity" => 1,
+                    ]
+                ],
+                "initial_stock" => [
+                    'quantity' => 10,
+                    'price' => 30.25,
+                    'source' => 'Mercury Drug - Lagro'
+                ]
             ]
             
         ];
 
-        foreach ($users as $user) {
-            User::firstOrCreate(
+        foreach ($medications as $medication) {
+            $med = Medication::firstOrCreate(
                 [
-                    'email' => $user['email'],
+                    'brand_name' => $medication['brandName'],
                 ],
                 [
-                    'fullname' => $user['fullname'],
-                    'password' => $user['password'],
-                    'email_verified_at' => $user['email_verified_at'], // Set email verification timestamp
+                    'user_id' => 1,
+                    'generic_name' => $medication['genericName'],
+                    'dosage' => $medication['dosage'],
+                    'frequency_type' => $medication['frequencyType'],
+                    'frequency' => $medication['frequency'],
+                    'status' => $medication['status'],
+                    'drug_form' => $medication['drugForm'],
+                    'remaining_stock' => $medication['initial_stock']['quantity'],
                 ]
             );
+            if ($med) {
+
+                $med->stocks()->create(
+                    [
+                        'quantity' => $medication['initial_stock']['quantity'],
+                        'price' => $medication['initial_stock']['price'],
+                        'source' => $medication['initial_stock']['source'],
+                        'user_id' => 1,
+                    ]
+                );
+
+                foreach ($medication['time_schedules'] as $time_schedule) {
+                    $med->timeSchedules()->create(
+                        [
+                            'schedule_time' => $time_schedule['schedule_time'],
+                            'quantity' => $time_schedule['quantity'],
+                        ]
+                    );
+                }
+            }
         }
 
     }

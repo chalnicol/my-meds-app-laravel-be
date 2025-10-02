@@ -72,6 +72,8 @@ Route::middleware(['auth:sanctum', 'user.blocked', 'verified'])->group(function 
 
     Route::put('/user/password', [AuthController::class, 'update_password']);
 
+    Route::put('/user/settings', [AuthController::class, 'update_settings']);
+
     Route::delete('/user', [AuthController::class, 'delete_account']);
 
     
